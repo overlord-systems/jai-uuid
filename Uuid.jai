@@ -107,6 +107,13 @@ uuid_v7 :: () -> Uuid #no_aoc {
 
 // UUIDs are just two s64 values, so equality is simply comparing each
 // of the two s64 values to each other from u1 and u2
+is_zero :: #bake_arguments uuid_equal(u2=ZERO_UUID);
+
+array_find :: (array: []Uuid, item: Uuid) -> (found: bool, index: s64) {
+    for array if uuid_equal(it, item) return true, it_index;
+    return false, -1;
+}
+
 uuid_equal :: inline (u1: Uuid, u2: Uuid) -> bool {
     u1_s64 := u1.data.(*s64);
     u2_s64 := u2.data.(*s64);
@@ -115,36 +122,44 @@ uuid_equal :: inline (u1: Uuid, u2: Uuid) -> bool {
 
 uuid_string :: (uuid: Uuid) -> string {
 
-    // @TODO: @PERF: We can use a lookup table and get rid of sprint?
-    push_context {
+    old_base := context.print_style.default_format_int.base;
+    old_min_digits := context.print_style.default_format_int.minimum_digits;
 
-        context.print_style.default_format_int.base = 16;
-        context.print_style.default_format_int.minimum_digits = 2;
+    context.print_style.default_format_int.base = 16;
+    context.print_style.default_format_int.minimum_digits = 2;
 
-        formatted := sprint("%0%0%0%0-%0%0-%0%0-%0%0-%0%0%0%0%0%0",
-            uuid[0], uuid[1], uuid[2], uuid[3],
-            uuid[4], uuid[5],
-            uuid[6], uuid[7],
-            uuid[8], uuid[9],
-            uuid[10], uuid[11],
-            uuid[12], uuid[13], uuid[14], uuid[15],
-        );
-
-        return formatted;
+    defer {
+        context.print_style.default_format_int.base = old_base;
+        context.print_style.default_format_int.minimum_digits = old_min_digits;
     }
+
+    // @TODO: @PERF: We can use a lookup table and get rid of sprint?
+    formatted := sprint("%0%0%0%0-%0%0-%0%0-%0%0-%0%0%0%0%0%0",
+        uuid[0], uuid[1], uuid[2], uuid[3],
+        uuid[4], uuid[5],
+        uuid[6], uuid[7],
+        uuid[8], uuid[9],
+        uuid[10], uuid[11],
+        uuid[12], uuid[13], uuid[14], uuid[15],
+    );
+
+    return formatted;
 }
 
 // Convenience function that uses temp allocator for the string
 tuuid_string :: inline (uuid: Uuid) -> string {
-    return uuid_string(uuid,, allocator=temp);
+    return uuid_string(uuid,, temp);
+}
+
+is_valid_uuid_len :: inline (s: string) -> bool {
+    return (s.count == 36 && s[35] != "\0") || (s.count == 37 && s[36] == "\0");
 }
 
 // Parses a uuid in the format '019540b2-9bd3-759d-978f-d7ba4bdb0736' into a Uuid.
 // Both lower/upper case strings work, but must be in the format shown above.
 parse_uuid :: (s: string) -> (success: bool, uuid: Uuid = ZERO_UUID) {
 
-    valid := s.count == 36 || (s.count == 37 && s[36] == #char "\0");
-    if !valid return false;
+    if !is_valid_uuid_len(s) return false;
 
     uuid: Uuid = ---;
 
@@ -184,7 +199,7 @@ must_parse_uuid :: inline (s: string) -> uuid: Uuid {
 // Takes an ascii representation of hex (e.g. 15 stored as "f")
 // and returns it as the hex value. Example: "f"->15, "a"->10, and so on.
 hex_ascii_to_hex :: inline (a: u8) -> u8 {
-    return ifx a <= #char "9" a - 48 else to_lower(a) - 87;
+    return ifx a <= "9" then a - 48 else to_lower(a) - 87;
 }
 
 // Takes a single hex byte as two nibbles and returns a decimal representation
@@ -192,6 +207,6 @@ hex_to_byte :: inline (upper: u8, lower: u8) -> u8 {
 
     upper = hex_ascii_to_hex(upper);
     lower = hex_ascii_to_hex(lower);
-    
+
     return upper*16 + lower;
 }
