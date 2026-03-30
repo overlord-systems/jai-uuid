@@ -1,20 +1,26 @@
 #import "Basic";
 #import "Sodium";
 
-Uuid :: #type [16]u8;
+Uuid :: struct {
+    bytes: [16]u8;
+}
 
-ZERO_UUID : Uuid : .[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+operator == :: (u1: Uuid, u2: Uuid) -> bool {
+    return inline uuid_equal(u1, u2);
+}
+
+ZERO_UUID : Uuid : {};
 
 uuid_v4 :: () -> Uuid {
 
     // https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_4_(random)
     uuid : Uuid = ---;
 
-    randombytes_buf(uuid.data.(*u64), 8);
-    randombytes_buf(uuid.data.(*u64)+1, 8);
+    randombytes_buf(uuid.bytes.data.(*u64), 8);
+    randombytes_buf(uuid.bytes.data.(*u64)+1, 8);
 
-    uuid[6] = (uuid[6] & 0x0f) | 0x40; // Clear upper nibble of 7th byte and set it to version to 4
-	uuid[8] = (uuid[8] & 0x3f) | 0x80; // Clear upper 2 bits and set it to variant 0b10
+    uuid.bytes[6] = (uuid.bytes[6] & 0x0f) | 0x40; // Clear upper nibble of 7th byte and set it to version to 4
+	uuid.bytes[8] = (uuid.bytes[8] & 0x3f) | 0x80; // Clear upper 2 bits and set it to variant 0b10
 
     return uuid;
 }
@@ -50,7 +56,7 @@ uuid_v7 :: () -> Uuid #no_aoc {
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     uuid : Uuid = ---;
 
-    a := uuid.data.(*u64);
+    a := uuid.bytes.data.(*u64);
 
     wall_at := current_time_consensus();
     wall_unix_ms := to_unix_ms(wall_at);
@@ -92,15 +98,15 @@ uuid_v7 :: () -> Uuid #no_aoc {
     //
     // For example, if timestamp has upper_byte=55 and lower_byte=123 (upper meaning more significant),
     // then the lower nibble of 55 will be set on index 6, and the lower byte will be set on index 7
-    uuid[6] = ((mono_unix_ns >> 8).(u8,no_check) & 0x0f) | 0x70;
-    uuid[7] = mono_unix_ns.(u8,no_check);
+    uuid.bytes[6] = ((mono_unix_ns >> 8).(u8,no_check) & 0x0f) | 0x70;
+    uuid.bytes[7] = mono_unix_ns.(u8,no_check);
 
     // Since we are using 12 bits for monotonic time, 62 bits are left for the random number,
     // so one 64 bit random value at the end is enough.
     //
     // The additional 2 bits we are writing are then overwritten with the variant.
     randombytes_buf((a+1), 8);
-    uuid[8] = (uuid[8] & 0x3f) | 0x80; // Clear upper 2 bits and set it to variant 0b10
+    uuid.bytes[8] = (uuid.bytes[8] & 0x3f) | 0x80; // Clear upper 2 bits and set it to variant 0b10
 
     return uuid;
 }
@@ -115,8 +121,8 @@ array_find :: (array: []Uuid, item: Uuid) -> (found: bool, index: s64) {
 }
 
 uuid_equal :: inline (u1: Uuid, u2: Uuid) -> bool {
-    u1_s64 := u1.data.(*s64);
-    u2_s64 := u2.data.(*s64);
+    u1_s64 := u1.bytes.data.(*s64);
+    u2_s64 := u2.bytes.data.(*s64);
     return u1_s64.* == u2_s64.* && (u1_s64 + 1).* == (u2_s64 + 1).*;
 }
 
@@ -129,7 +135,7 @@ uuid_string :: (uuid: Uuid) -> string {
     };
 
     index : u8 = 0;
-    for uuid {
+    for uuid.bytes {
 
         hex := byte_to_hex_arr[it];
 
@@ -158,32 +164,32 @@ is_valid_uuid_len :: inline (s: string) -> bool {
 
 // Parses a uuid in the format '019540b2-9bd3-759d-978f-d7ba4bdb0736' into a Uuid.
 // Both lower/upper case strings work, but must be in the format shown above.
-parse_uuid :: (s: string) -> (success: bool, uuid: Uuid = ZERO_UUID) {
+parse_uuid :: (s: string) -> (success: bool, uuid: Uuid) {
 
-    if !is_valid_uuid_len(s) return false;
+    if !is_valid_uuid_len(s) return false, ZERO_UUID;
 
     uuid: Uuid = ---;
 
-    uuid[0] = hex_to_byte(s[0], s[1]);
-    uuid[1] = hex_to_byte(s[2], s[3]);
-    uuid[2] = hex_to_byte(s[4], s[5]);
-    uuid[3] = hex_to_byte(s[6], s[7]);
+    uuid.bytes[0] = hex_to_byte(s[0], s[1]);
+    uuid.bytes[1] = hex_to_byte(s[2], s[3]);
+    uuid.bytes[2] = hex_to_byte(s[4], s[5]);
+    uuid.bytes[3] = hex_to_byte(s[6], s[7]);
     // -
-    uuid[4] = hex_to_byte(s[9], s[10]);
-    uuid[5] = hex_to_byte(s[11], s[12]);
+    uuid.bytes[4] = hex_to_byte(s[9], s[10]);
+    uuid.bytes[5] = hex_to_byte(s[11], s[12]);
     // -
-    uuid[6] = hex_to_byte(s[14], s[15]);
-    uuid[7] = hex_to_byte(s[16], s[17]);
+    uuid.bytes[6] = hex_to_byte(s[14], s[15]);
+    uuid.bytes[7] = hex_to_byte(s[16], s[17]);
     // -
-    uuid[8] = hex_to_byte(s[19], s[20]);
-    uuid[9] = hex_to_byte(s[21], s[22]);
+    uuid.bytes[8] = hex_to_byte(s[19], s[20]);
+    uuid.bytes[9] = hex_to_byte(s[21], s[22]);
     // -
-    uuid[10] = hex_to_byte(s[24], s[25]);
-    uuid[11] = hex_to_byte(s[26], s[27]);
-    uuid[12] = hex_to_byte(s[28], s[29]);
-    uuid[13] = hex_to_byte(s[30], s[31]);
-    uuid[14] = hex_to_byte(s[32], s[33]);
-    uuid[15] = hex_to_byte(s[34], s[35]);
+    uuid.bytes[10] = hex_to_byte(s[24], s[25]);
+    uuid.bytes[11] = hex_to_byte(s[26], s[27]);
+    uuid.bytes[12] = hex_to_byte(s[28], s[29]);
+    uuid.bytes[13] = hex_to_byte(s[30], s[31]);
+    uuid.bytes[14] = hex_to_byte(s[32], s[33]);
+    uuid.bytes[15] = hex_to_byte(s[34], s[35]);
 
     return true, uuid;
 }
@@ -193,6 +199,41 @@ must_parse_uuid :: inline (s: string) -> uuid: Uuid {
     assert(success, "uuid string '%' failed to parse", s);
 
     return uuid;
+}
+
+// The passed uuid must be a v7. Passing another version will result in garbage output.
+unix_ms_from_uuid :: (uuid: Uuid) -> Unixts {
+
+    unix_ms : Unixts = uuid.bytes.data.(*Unixts).*;
+
+    // Time is stored big endian, so we make little endian
+    #if CPU == .X64 {
+
+        // This bswap instructions is used to convert big<->little endian by swapping
+        // byte positions, similar to our shifts and assigns on non-x86 CPUs.
+        little_endian := unix_ms.(u64,no_check);
+        #asm {
+            bswap.64 little_endian;
+        }
+
+        unix_ms = (little_endian >> 16).(Unixts,no_check);
+
+    } else {
+
+        unix_ms = (16 << unix_ms) >> 16;
+
+        little_endian := unix_ms;
+        little_endian[0] = (unix_ms >> 40).(u8,no_check);
+        little_endian[1] = (unix_ms >> 32).(u8,no_check);
+        little_endian[2] = (unix_ms >> 24).(u8,no_check);
+        little_endian[3] = (unix_ms >> 16).(u8,no_check);
+        little_endian[4] = (unix_ms >> 8).(u8,no_check);
+        little_endian[5] = (unix_ms).(u8,no_check);
+
+        unix_ms = little_endian;
+    }
+
+    return unix_ms;
 }
 
 #scope_module;
